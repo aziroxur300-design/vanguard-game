@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>VALGARD — Le Dernier Rempart</title>
+<title>L'HERITAGE DU MUR— Le Dernier Rempart</title>
 <style>
 :root{--bg:#0c0e11;--panel:#171c20;--panel2:#20272d;--line:#39434b;--text:#edf2f4;--muted:#aab4ba;--accent:#c89b54;--titan:#8b3a3a}
 *{box-sizing:border-box}
@@ -24,6 +24,11 @@ button.wide{width:100%;text-align:center;margin-top:10px}
 #titleScreen button{padding:16px}
 .foot{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:#6b747a;font-size:10.5px;padding:0 16px}
 
+#familyBadge{display:inline-block;margin:8px 0;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#0d1012;color:var(--accent);font-size:12px}
+#familyInfo{margin-top:10px;padding:11px;border:1px solid var(--line);border-radius:12px;background:#0d1012;color:var(--muted);font-size:13px;line-height:1.45}
+#saveHint{font-size:11px;color:var(--muted);margin-top:10px}
+#uiBar{position:fixed;top:0;left:0;right:0;z-index:4;display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:#0b0e10dd;border-bottom:1px solid #2b3338;backdrop-filter:blur(8px);font-size:11px}
+#uiBar span{padding:5px 8px;border:1px solid #2b3338;border-radius:999px;background:#151a1e}
 #createScreen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
 .createCard{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 20px 50px #000a}
 .createCard h2{margin:0 0 4px;letter-spacing:1px;color:var(--accent);font-size:20px}
@@ -69,193 +74,637 @@ const KEY="valgard_legacy_v1";
 let G={
 started:false,name:"",
 traits:{courage:0,loyalty:0,compassion:0,cunning:0},
-flags:{origin:null,unit:null,sael:null,yunaStatus:"vivante",exposedTruth:false,joinedProgram:false,acceptedPower:false,protectedEveryone:false,sacrificeMade:false,trustVoss:0},
+flags:{origin:null,unit:null,sael:null,yunaStatus:"vivante",exposedTruth:false,joinedProgram:false,acceptedPower:false,protectedEveryone:false,sacrificeMade:false,trustVoss:0,family:null,canonTimeline:true},
 currentScene:null,depth:0
 };
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-const TOTAL_STEPS=15;
+const TOTAL_STEPS=0;
 
 /* ================= HISTOIRE ================= */
+
+const FAMILIES={
+  ackerman:{name:"Ackerman",weight:14,bonus:"Réflexes et instinct de survie renforcés.",malus:"Confiance plus difficile à accorder."},
+  reiss:{name:"Reiss",weight:11,bonus:"Intuition politique et mémoire familiale renforcées.",malus:"Ton nom peut attirer l'attention de personnes dangereuses."},
+  yeager:{name:"Yeager",weight:12,bonus:"Volonté et courage renforcés.",malus:"Tes décisions impulsives peuvent compliquer certaines négociations."},
+  braun:{name:"Braun",weight:14,bonus:"Endurance et résistance à la pression renforcées.",malus:"Tu as tendance à porter trop longtemps le poids des ordres."},
+  arlert:{name:"Arlert",weight:16,bonus:"Observation, logique et imagination renforcées.",malus:"Tu pars avec moins d'expérience physique."},
+  tybur:{name:"Tybur",weight:8,bonus:"Influence sociale et compréhension politique renforcées.",malus:"Certaines personnes se méfient de ton milieu."},
+  leonhart:{name:"Leonhart",weight:12,bonus:"Discipline et agilité renforcées.",malus:"Tu dévoiles difficilement tes intentions."},
+  springer:{name:"Springer",weight:13,bonus:"Courage et esprit de camaraderie renforcés.",malus:"Tu as moins d'avantages sociaux."}
+};
+
+// Les poids sont volontairement asymétriques : les familles fortes restent rares,
+// mais sont nettement plus accessibles qu'avec un tirage totalement uniforme.
+// Les bonus numériques sont des mécaniques de jeu originales, pas des statistiques officielles.
+function rollFamily(){
+ const keys=Object.keys(FAMILIES);
+ const total=keys.reduce((n,k)=>n+FAMILIES[k].weight,0);
+ let r=Math.random()*total;
+ for(const k of keys){r-=FAMILIES[k].weight;if(r<=0)return k}
+ return keys[keys.length-1];
+}
+function applyFamilyBuff(){
+ const f=G.flags.family;
+ if(f==="ackerman"){G.traits.courage+=2;G.traits.cunning+=3}
+ if(f==="reiss"){G.traits.cunning+=3;G.traits.loyalty+=2}
+ if(f==="yeager"){G.traits.courage+=3;G.traits.loyalty+=1}
+ if(f==="braun"){G.traits.loyalty+=3;G.traits.courage+=1}
+ if(f==="arlert"){G.traits.cunning+=4;G.traits.compassion+=1}
+ if(f==="tybur"){G.traits.cunning+=3;G.traits.loyalty+=2}
+ if(f==="leonhart"){G.traits.cunning+=3;G.traits.courage+=2}
+ if(f==="springer"){G.traits.courage+=2;G.traits.loyalty+=2}
+}
+
+// Système Titan : possibilité d'en avoir un dès le départ, ou de l'éveiller plus tard.
+// Les scènes et conséquences restent non graphiques.
+function rollTitanAtStart(){
+ const f=G.flags.family;
+ const bonus={ackerman:.03,reiss:.02,yeager:.05,braun:.02,arlert:.015,tybur:.025,leonhart:.03,springer:.02}[f]||0;
+ return Math.random() < (.14+bonus);
+}
+function titanName(){
+ const names=["Titan d'Assaut","Titan Charrette","Titan Féminin","Titan Bestial","Titan Mâchoire","Titan Cuirassé","Titan Colossal"];
+ return names[Math.floor(Math.random()*names.length)];
+}
+function awakenTitan(source){
+ if(G.flags.titan)return;
+ G.flags.titan=true;
+ G.flags.titanType=titanName();
+ G.flags.titanSource=source;
+ G.flags.titanControl=source==="start"?2:1;
+ logEvent("Un pouvoir de Titan est lié à ton histoire : "+G.flags.titanType+".");
+}
+function maybeAwakenTitan(sceneId){
+ if(G.flags.titan)return;
+ const familyBoost=["yeager","ackerman","leonhart"].includes(G.flags.family)?0.035:0.02;
+ if(["fall","trost_chaos","forest_choice","return_charge","serum_choice"].includes(sceneId) && Math.random()<(.11+familyBoost)) awakenTitan(sceneId);
+}
+
 const STORY={
-
-intro:{text:"Le vent qui balaie les remparts de Valgard porte toujours une odeur de fer et de poussière. Avant d'être une recrue parmi tant d'autres, tu étais autre chose. Un souvenir, plus vif que les autres, te revient tandis que la charrette qui t'amène franchit la grande porte.",choices:[
- {label:"L'orphelin·e des ruines — ta ville natale rasée par une <i>anomalie</i> il y a dix ans",next:"o_ruins",effects:g=>{g.flags.origin="ruines";g.traits.courage+=2}},
- {label:"L'enfant de bonne famille — élevé·e dans le confort, en rupture avec les tiens",next:"o_noble",effects:g=>{g.flags.origin="noble";g.traits.cunning+=2}},
- {label:"Le déserteur — tu portes le nom d'un père qui a fui le front, et sa honte avec",next:"o_deserter",effects:g=>{g.flags.origin="deserteur";g.traits.loyalty-=1;g.traits.courage+=1}}
+snk_arrival:{
+text:g=>`<i>Shiganshina — plusieurs années avant la chute.</i><br><br>
+Tu arrives dans le district avec une valise, quelques souvenirs et une famille dont le nom va influencer toute ta vie. Tu n'es pas Eren, Mikasa ou Armin. Tu es une personne nouvelle dans leur monde, avec tes propres peurs, tes propres liens et tes propres décisions.<br><br>
+Sur la place, trois enfants discutent. Eren parle déjà de l'extérieur. Armin serre un livre contre lui. Mikasa observe les alentours avec une attention étonnante.<br><br>
+Ton histoire commence ici. Aucun écran ne te dira combien de scènes il reste : tu avances simplement, jour après jour.`,
+choices:[
+{label:"T'approcher d'Eren et Armin",next:"first_meet",effects:g=>{g.traits.courage++;g.traits.compassion++}},
+{label:"Parler à Mikasa",next:"first_mikasa",effects:g=>{g.traits.cunning++;g.traits.courage++}},
+{label:"Retourner chez ta famille",next:"family_home",effects:g=>g.traits.loyalty++}
 ]},
-o_ruins:{text:"Tu avais sept ans quand le ciel s'est déchiré au-dessus de ta ville. Ce qui en est sorti n'avait rien d'humain — une masse de chair difforme, haute comme trois maisons, qui a traversé les murs comme du papier mouillé. Tu te souviens du goût de la poussière dans ta gorge, des cris qui s'éteignaient un à un, et de la main d'un inconnu qui t'a tirée hors des décombres avant de disparaître dans la fumée sans même te dire son nom. Depuis ce jour, une question ne t'a jamais quittée : <i>qu'est-ce que c'était, vraiment ?</i> Valgard, dit-on, détient peut-être une partie de la réponse.",choices:[
- {label:"Continuer vers la ville",next:"arrival"}
+first_meet:{
+text:g=>`Eren te regarde comme si tu venais d'arriver d'un autre monde. Il parle des frontières, des océans et des terres qu'il veut voir.<br><br>
+Armin intervient calmement. Il connaît des choses que beaucoup d'adultes ignorent. La conversation dérive vers une question simple : <i>qu'est-ce que la liberté ?</i><br><br>
+Tu comprends que ces trois enfants ne sont pas ordinaires. Tu ne sais pas encore que leurs chemins vont croiser les tiens pendant des années.`,
+choices:[
+{label:"Dire que la liberté commence par le choix",next:"child_day",effects:g=>g.traits.cunning++},
+{label:"Dire que tu veux voir le monde extérieur",next:"child_day",effects:g=>g.traits.courage++},
+{label:"Les écouter sans donner ton avis",next:"child_day"}
 ]},
-o_noble:{text:"Ta famille possédait des entrepôts entiers dans la capitale, et un nom qui ouvrait toutes les portes — sauf celles que tu voulais vraiment franchir. Le jour où tu as annoncé vouloir t'engager à Valgard, ta mère a brisé un vase en porcelaine et ton père ne t'a plus adressé la parole. Tu n'as jamais su leur expliquer pourquoi une vie de confort te semblait plus vide qu'un champ de bataille. Peut-être cherches-tu simplement à prouver, à toi-même autant qu'à eux, que tu es capable de quelque chose qui compte vraiment.",choices:[
- {label:"Continuer vers la ville",next:"arrival"}
+first_mikasa:{
+text:`Mikasa te fixe quelques secondes avant de répondre. Elle parle peu, mais remarque immédiatement que tu n'es pas du quartier.<br><br>
+Eren interrompt la conversation pour parler d'une patrouille militaire. Armin sourit devant son enthousiasme. Tu réalises que leur amitié est déjà solide.<br><br>
+Une cloche sonne au loin. La journée continue comme si rien ne pouvait changer.`,
+choices:[
+{label:"Rester avec eux",next:"child_day",effects:g=>g.traits.loyalty++},
+{label:"Rejoindre ta famille avant la nuit",next:"family_home",effects:g=>g.traits.loyalty++}
 ]},
-o_deserter:{text:"Ton père a fui un siège, autrefois, abandonnant douze hommes à une mort certaine pour sauver sa propre peau. Il n'en a jamais parlé ; les autres, si. Tu as grandi avec ce nom accroché à toi comme une seconde peau, celui qu'on murmure dans ton dos. T'engager à Valgard n'est pas un choix : c'est une dette à rembourser, que tu le veuilles ou non. Tu comptes bien prouver que le sang ne fait pas le lâche.",choices:[
- {label:"Continuer vers la ville",next:"arrival"}
+family_home:{
+text:g=>`Chez toi, le nom <b>${esc(FAMILIES[g.flags.family].name)}</b> est traité comme une chose normale. Tes proches ne veulent pas que tu te mêles des histoires des militaires.<br><br>
+Pourtant, un détail te frappe : certaines conversations s'arrêtent lorsque tu entres dans une pièce. Ta famille sait quelque chose que tu ignores. Tu ne sais pas encore si ce secret te protégera ou te condamnera.<br><br>
+Le soir tombe sur Shiganshina.`,
+choices:[
+{label:"Questionner un membre de ta famille",next:"family_secret",effects:g=>g.traits.cunning++},
+{label:"Ne rien demander et profiter du calme",next:"child_day",effects:g=>g.traits.loyalty++}
 ]},
-
-arrival:{text:"La charrette s'arrête dans un nuage de poussière ocre. Valgard se dresse devant toi : une forteresse tentaculaire creusée à même une falaise, hérissée de tours de guet et de grues de bois, où des soldats en armure sombre circulent sans un regard pour les nouveaux venus. Une odeur âcre de métal chauffé flotte dans l'air — la forge tourne jour et nuit, dit-on, depuis des années. Un attroupement bruyant se forme près de la grande cour : quelque chose retient l'attention de la foule.",choices:[
- {label:"Te frayer un chemin vers l'attroupement",next:"crowd"},
- {label:"Filer directement vers les baraquements, sans traîner",next:"barracks_direct"},
- {label:"Observer la ville depuis les hauteurs avant de descendre",next:"heights"}
+family_secret:{
+text:g=>`La réponse est vague. On te dit seulement : « Dans cette famille, certaines choses doivent rester cachées. »<br><br>
+Tu insistes. On te demande alors de promettre une chose : si un jour quelqu'un vient chercher des réponses, ne lui fais pas confiance immédiatement.<br><br>
+Tu ignores pourquoi cette phrase te met mal à l'aise. Le lendemain, tu retournes dehors.`,
+choices:[
+{label:"Garder le secret",next:"child_day",effects:g=>g.traits.loyalty++},
+{label:"Décider de découvrir la vérité plus tard",next:"child_day",effects:g=>g.traits.cunning++}
 ]},
-crowd:{text:"Tu te faufiles entre les épaules et les capes. Au centre du cercle, deux soldats retiennent un troisième, un civil hagard aux yeux injectés de sang, qui hurle des mots sans suite — <i>« ils nous mentent, ils nous mentent tous »</i> — avant d'être emmené sans ménagement vers l'intérieur de la forteresse. La foule se disperse en chuchotant. Une jeune recrue à côté de toi, l'air aussi perdu que toi, souffle : « Ça arrive de plus en plus souvent, ces derniers temps. On dit que certains habitants... changent. »",choices:[
- {label:"« Changent comment ? » — insister pour en savoir plus",next:"crowd_ask",effects:g=>{g.traits.cunning+=1}},
- {label:"Ne pas s'attarder sur des rumeurs de recrue nerveuse",next:"barracks",effects:g=>{g.traits.loyalty+=1}}
+child_day:{
+text:`Les mois passent. Tu grandis dans Shiganshina. Tu croises régulièrement Eren, Mikasa et Armin. Parfois, vous discutez. Parfois, vos chemins se séparent.<br><br>
+Tu commences à comprendre la vie du district : les marchés, les ateliers, les patrouilles, les soldats qui rêvent d'une promotion et ceux qui redoutent le jour où les murs ne suffiront plus.<br><br>
+Puis un après-midi, le ciel change.`,
+choices:[
+{label:"Aller voir ce qui se passe près du mur",next:"fall"},
+{label:"Chercher ta famille immédiatement",next:"fall_family",effects:g=>{g.traits.loyalty++;g.traits.compassion++}}
 ]},
-crowd_ask:{text:"La recrue jette un œil autour d'elle avant de baisser la voix. « On dit qu'ils grandissent. Littéralement. Que leur peau se déchire et qu'il en sort... quelque chose. Un des veilleurs de nuit a disparu la semaine dernière après en avoir vu un. Officiellement, c'est une maladie. Officieusement, personne n'y croit vraiment. » Elle se reprend soudain, mal à l'aise d'en avoir trop dit, et s'éloigne rapidement vers les baraquements.",choices:[
- {label:"La suivre vers les baraquements",next:"barracks"}
+fall:{
+text:g=>`Un grondement traverse Shiganshina. Une silhouette immense apparaît au-dessus du mur. Pendant une seconde, tout le monde reste immobile.<br><br>
+Puis la panique commence.<br><br>
+Le Colossal Titan vient de faire tomber une partie de la porte. Les soldats donnent des ordres contradictoires. Les rues se remplissent de personnes qui cherchent une sortie.<br><br>
+Tu comprends que ton enfance vient de se terminer.`,
+choices:[
+{label:"Courir vers les civils",next:"fall_rescue",effects:g=>g.traits.compassion+=2},
+{label:"Rejoindre les soldats",next:"fall_soldiers",effects:g=>g.traits.courage+=2},
+{label:"Chercher ta famille",next:"fall_family",effects:g=>g.traits.loyalty+=2}
 ]},
-barracks_direct:{text:"Tu ignores l'attroupement et rejoins directement les baraquements, sac sur l'épaule, déterminé·e à ne pas perdre de temps. Un sergent bourru t'inscrit sur un registre sans lever les yeux. « Bon réflexe, recrue. Ici, la curiosité tue plus vite que les lames. » Tu ne sauras jamais ce qui agitait la foule que tu as laissée derrière toi — mais quelque chose dans le ton du sergent te dit que ce n'était pas rien.",choices:[
- {label:"Continuer",next:"barracks"}
+fall_family:{
+text:`Tu traverses les rues aussi vite que possible. Des portes claquent. Des chevaux paniquent. Les soldats tentent d'organiser l'évacuation.<br><br>
+Tu retrouves finalement un membre de ta famille. Il te regarde et comprend immédiatement que la situation est perdue. Il ne te donne qu'un ordre : partir.<br><br>
+Derrière vous, Shiganshina change à jamais.`,
+choices:[
+{label:"Obéir et partir",next:"evacuation"},
+{label:"Retourner chercher quelqu'un d'autre",next:"fall_rescue",effects:g=>{g.traits.courage++;g.traits.compassion++}}
 ]},
-heights:{text:"Tu grimpes un escalier de service jusqu'à un promontoire dominant la ville. De là-haut, Valgard ressemble à une machine parfaitement huilée : des colonnes de fumée montent d'un bâtiment isolé à l'écart des casernes, entouré d'une double clôture et de gardes bien plus nombreux qu'ailleurs. Aucune enseigne n'indique ce que c'est. Un vieux soldat, accoudé non loin, surprend ton regard. « Ça, petit, c'est un endroit où on ne pose pas de questions. Pas si on veut dormir tranquille. » Il s'éloigne sans un mot de plus.",choices:[
- {label:"Redescendre vers les baraquements, la question en tête",next:"barracks",effects:g=>{g.traits.cunning+=1}}
+fall_rescue:{
+text:`Tu aides des habitants à rejoindre les embarcations et les routes d'évacuation. Tu ne peux pas sauver tout le monde, mais plusieurs personnes passent grâce à toi.<br><br>
+Au milieu du chaos, tu aperçois Eren, Mikasa et Armin. Leur vie vient elle aussi de basculer.<br><br>
+Une voix crie de se dépêcher. Tu dois choisir entre rester et prendre davantage de risques, ou accepter que tu ne peux pas contrôler chaque événement.`,
+choices:[
+{label:"Rester encore pour aider",next:"evacuation",effects:g=>g.traits.compassion+=2},
+{label:"Partir avec les survivants",next:"evacuation",effects:g=>g.traits.loyalty++}
 ]},
-
-barracks:{text:"Les baraquements bourdonnent d'activité. Un officier au visage buriné t'accueille, registre en main : le Commandant Ilyan Voss, responsable de l'affectation des nouvelles recrues. Son regard te jauge en un instant, comme s'il lisait déjà en toi. « Trois voies s'offrent à toi ici, recrue. Choisis avec soin — ce choix te suivra plus longtemps que tu ne le crois. »",choices:[
- {label:"Les Remparts — la ligne de défense directe, corps à corps",next:"unit_remparts",effects:g=>{g.flags.unit="Remparts";g.traits.courage+=2}},
- {label:"Les Éclaireurs — reconnaissance et missions hors des murs",next:"unit_eclaireurs",effects:g=>{g.flags.unit="Éclaireurs";g.traits.cunning+=1;g.traits.courage+=1}},
- {label:"Le Renseignement — surveillance intérieure et enquêtes",next:"unit_renseignement",effects:g=>{g.flags.unit="Renseignement";g.traits.cunning+=2}}
+fall_soldiers:{
+text:`Tu rejoins un groupe de soldats qui essaie de maintenir un passage ouvert. Tu n'es pas encore formé, mais tu aides comme tu peux : porter du matériel, guider des enfants, transmettre des ordres.<br><br>
+Un soldat te dit que le monde ne sera plus jamais le même. Tu comprends alors que si tu veux protéger les tiens, tu devras apprendre à te battre et à réfléchir sous pression.`,
+choices:[
+{label:"Promettre de rejoindre l'armée",next:"evacuation",effects:g=>g.traits.courage+=2},
+{label:"Promettre de protéger les survivants",next:"evacuation",effects:g=>g.traits.loyalty++}
 ]},
-unit_remparts:{text:"« Les Remparts, » répète Voss avec un sourire approbateur. « De la chair et de l'acier entre la ville et ce qui rôde dehors. Pas le poste le plus subtil, mais le plus nécessaire. » On te remet une lame courte et une armure qui a visiblement déjà servi — les entailles sur le plastron racontent une histoire que personne ne prend la peine de t'expliquer.",choices:[{label:"Continuer",next:"b1_contact"}]},
-unit_eclaireurs:{text:"« Les Éclaireurs, » note Voss en cochant une case. « Peu reviennent indemnes, mais ceux qui reviennent en savent toujours plus que tout le reste de la garnison réuni. » Il te tend une cape légère et un ordre de mission déjà daté de la semaine suivante — ta première sortie hors des murs est imminente.",choices:[{label:"Continuer",next:"b1_contact"}]},
-unit_renseignement:{text:"Voss hausse un sourcil, presque amusé. « Le Renseignement. Peu de recrues choisissent ça volontairement. » Il te glisse un badge discret, sans emblème visible. « Ici, ton arme la plus utile, ce sont tes oreilles. Utilise-les avant ta lame. » Tu sens déjà que ce poste t'ouvrira des portes que d'autres ne verront jamais.",choices:[{label:"Continuer",next:"b1_contact"}]},
-
-b1_contact:{text:"Dans la cour d'entraînement, deux visages se détachent du lot. Sael, une recrue au sourire en coin et au regard de défi permanent, t'évalue de haut en bas sans détour : « Alors c'est toi, la nouvelle recrue dont tout le monde parle déjà ? » À l'écart, Yuna, plus discrète, t'observe avec une curiosité franche avant de te sourire sincèrement — la première personne depuis ton arrivée à ne rien exiger de toi.",choices:[
- {label:"Répondre à Sael du tac au tac, sans te laisser démonter",next:"b1_sael_clash",effects:g=>{g.traits.courage+=1}},
- {label:"Ignorer la provocation et rejoindre Yuna",next:"b1_yuna_first",effects:g=>{g.traits.compassion+=1}},
- {label:"Rester en retrait, observer les deux avant de choisir ton camp",next:"b1_observe",effects:g=>{g.traits.cunning+=1}},
- {label:"Proposer directement un duel amical à Sael pour couper court",next:"b1_duel",effects:g=>{g.traits.courage+=1}}
+evacuation:{
+text:`Les réfugiés affluent. Les jours suivants sont difficiles. Tu entends des rumeurs sur les Titans, sur la perte de Shiganshina et sur les soldats disparus.<br><br>
+Eren, Mikasa et Armin ont eux aussi été évacués. Tu les retrouves un jour dans la foule. Personne ne sait quoi dire.<br><br>
+Tu prends une décision : tu entreras dans l'armée. Pas pour devenir une légende. Pour avoir enfin le droit d'agir.`,
+choices:[
+{label:"Choisir l'entraînement militaire",next:"cadet_start",effects:g=>{g.traits.courage++;g.traits.loyalty++}},
+{label:"Te concentrer d'abord sur les connaissances",next:"cadet_start",effects:g=>g.traits.cunning+=2}
 ]},
-b1_sael_clash:{text:"« On verra si ta langue est aussi rapide que tes poings, » réplique Sael, mi-agacé, mi-impressionné. Un respect prudent s'installe entre vous — le genre qui, avec le temps, pourrait devenir une vraie amitié, ou un vrai conflit. Yuna, en retrait, pouffe discrètement de la scène.",effects:g=>{g.flags.sael="rival_respect"},choices:[{label:"Continuer",next:"c1_rumor"}]},
-b1_yuna_first:{text:"Yuna t'accueille comme si vous vous connaissiez depuis toujours. « Ne fais pas attention à Sael, il teste tout le monde comme ça. » Sa gentillesse désarmante te met immédiatement à l'aise dans cet endroit hostile. Sael, resté en retrait, vous observe avec un mélange d'agacement et de curiosité.",effects:g=>{g.flags.sael="distant"},choices:[{label:"Continuer",next:"c1_rumor"}]},
-b1_observe:{text:"Tu prends le temps de jauger les deux avant de t'avancer, ce qui n'échappe ni à l'un ni à l'autre. « Prudent·e, » commente Sael avec un sourire en coin qui n'est pas totalement désapprobateur. Yuna, elle, semble simplement amusée par ta réserve. Aucun camp n'est encore scellé — et c'est peut-être mieux ainsi.",effects:g=>{g.flags.sael="neutral"},choices:[{label:"Continuer",next:"c1_rumor"}]},
-b1_duel:{text:"Sael accepte ton défi avec un enthousiasme féroce. Le combat est bref, brutal, et se solde par une égalité frustrante pour vous deux — assez pour forcer un respect mutuel immédiat. « Pas mal, » lâche-t-il, essoufflé, en te tendant une main que tu serres. Yuna applaudit, mi-amusée mi-inquiète pour vos côtes.",effects:g=>{g.flags.sael="ally";g.traits.courage+=1},choices:[{label:"Continuer",next:"c1_rumor"}]},
-
-c1_rumor:{text:"Les semaines passent, rythmées par l'entraînement. Puis, un soir, alors que tu regagnes ton dortoir, tu croises un convoi discret escorté par des gardes du Renseignement : trois civils encapuchonnés, menottés, qu'on fait entrer dans le bâtiment isolé que tu as peut-être déjà aperçu depuis les hauteurs de la ville. Personne autour de toi ne semble vouloir en parler — mais leurs regards fuyants disent tout le contraire de leur silence.",choices:[
- {label:"Suivre discrètement le convoi pour voir où il mène vraiment",next:"c2_secret",effects:g=>{g.traits.cunning+=2}},
- {label:"Rapporter ce que tu as vu au Commandant Voss",next:"c2_report",effects:g=>{g.traits.loyalty+=2}},
- {label:"Ne rien faire — ce ne sont pas tes affaires, pas encore",next:"c2_ignore",effects:g=>{g.traits.loyalty+=1}},
- {label:"En parler d'abord à Yuna ou Sael, pour ne pas porter ça seul·e",next:"c2_confide",effects:g=>{g.traits.compassion+=1}}
+cadet_start:{
+text:`<i>Année suivante — Camp d'entraînement.</i><br><br>
+Tu arrives parmi les recrues. Jean Kirschtein, Sasha Braus, Connie Springer, Historia Reiss, Reiner Braun, Bertholdt Hoover, Annie Leonhart, Eren, Mikasa et Armin sont là eux aussi.<br><br>
+Pour la première fois, tu peux réellement mesurer les différences entre vous. Certains ont de la force, d'autres de l'équilibre, d'autres encore une intelligence remarquable.<br><br>
+Ton nom de famille attire parfois un regard de trop.`,
+choices:[
+{label:"Te concentrer sur l'équipement tridimensionnel",next:"training_gear",effects:g=>g.traits.courage++},
+{label:"Observer les autres recrues",next:"training_social",effects:g=>g.traits.cunning++},
+{label:"Chercher à comprendre ton propre héritage",next:"family_training",effects:g=>g.traits.cunning+=2}
 ]},
-c2_secret:{text:"Tu te glisses dans l'ombre des entrepôts et suis le convoi jusqu'à la double clôture du bâtiment isolé. À travers une fenêtre mal fermée, tu aperçois furtivement des silhouettes en blouse, des instruments métalliques, et surtout — l'espace d'une seconde avant qu'un garde ne referme un volet — quelque chose de bien trop grand pour être humain, enchaîné dans l'obscurité d'une salle voûtée. Ton sang se glace. Ce que tu viens de voir, tu ne pourras plus jamais l'oublier.",effects:g=>{g.flags.sawTruthEarly=true},choices:[{label:"Continuer",next:"d1_mentor"}]},
-c2_report:{text:"Tu te présentes au bureau de Voss et rapportes fidèlement ce que tu as vu. Il t'écoute sans ciller, le visage aussi impénétrable qu'un mur de pierre. « Bien vu, bien rapporté, » dit-il enfin. « C'est exactement le genre de discrétion que j'attends de mes soldats. » Il ne t'en dit pas plus — mais quelque chose dans son regard te fait comprendre que ta loyauté vient d'être remarquée, pour le meilleur ou pour le pire.",effects:g=>{g.flags.trustVoss+=2},choices:[{label:"Continuer",next:"d1_mentor"}]},
-c2_ignore:{text:"Tu détournes le regard et poursuis ton chemin. Ce soir-là, tu dors mal, hanté par des images que tu n'as même pas vraiment vues — seulement devinées. Le doute, une fois planté, ne s'arrache pas si facilement.",choices:[{label:"Continuer",next:"d1_mentor"}]},
-c2_confide:{text:"Tu racontes la scène à Yuna, qui pâlit visiblement, et à Sael, qui se contente de hausser les épaules avec un peu trop d'insistance. « Il y a des choses qu'on ne regarde pas en face, ici, si on veut vieillir, » dit-il finalement, presque comme une mise en garde. Yuna, elle, garde le silence — mais tu la sens désormais aussi inquiète que toi.",effects:g=>{g.traits.compassion+=1},choices:[{label:"Continuer",next:"d1_mentor"}]},
-
-d1_mentor:{text:"Le Commandant Voss te convoque en privé, un soir, dans son bureau éclairé à la seule lumière d'une lampe à huile. « Tu poses les bonnes questions, recrue. Ou tu en as trop entendu. L'un ou l'autre, ça te met dans une position délicate. » Il pousse vers toi un dossier scellé, sans l'ouvrir. « Ce que ce dossier contient pourrait sauver Valgard. Ou la détruire, si la population l'apprenait mal. Je te fais confiance pour comprendre la différence — ou pas. »",choices:[
- {label:"Ouvrir le dossier immédiatement, devant lui",next:"d1_open",effects:g=>{g.traits.courage+=1}},
- {label:"Refuser de le prendre — tu ne veux pas de ce fardeau",next:"d1_refuse",effects:g=>{g.traits.loyalty+=1}},
- {label:"Le prendre sans l'ouvrir, et poser tes propres conditions",next:"d1_conditions",effects:g=>{g.traits.cunning+=2}}
+training_gear:{
+text:`Les premiers essais sont humiliants. Tu rates, recommences, tombes et recommences encore. Annie te montre une méthode plus efficace. Mikasa te dépasse sans même sembler forcer. Reiner encourage les recrues en difficulté.<br><br>
+Tu finis par trouver ton rythme.<br><br>
+Le soir, tu écris dans un carnet ce qui fonctionne et ce qui ne fonctionne pas. Tu comprends qu'un bon soldat ne dépend pas uniquement de ses muscles.`,
+choices:[
+{label:"Continuer jusqu'à maîtriser la technique",next:"training_test",effects:g=>g.traits.courage+=2},
+{label:"Demander conseil à Annie",next:"training_test",effects:g=>g.traits.cunning++}
 ]},
-d1_open:{text:"Tu brises le sceau sans hésiter. À l'intérieur : des rapports d'expérimentation, des noms de volontaires — et de prisonniers non-volontaires —, et une conclusion glaçante griffonnée en marge d'un des derniers feuillets : <i>« le sérum fonctionne. Le contrôle, non. »</i> Voss ne dit rien, se contentant d'observer ta réaction avec une attention presque clinique.",effects:g=>{g.flags.sawTruthEarly=true;g.flags.trustVoss-=1},choices:[{label:"Continuer",next:"e1_betrayal"}]},
-d1_refuse:{text:"« Je ne veux pas savoir, » dis-tu fermement, repoussant le dossier. Voss hoche lentement la tête, presque déçu, presque soulagé. « La plupart des soldats sages font ce choix. Peu le regrettent. » Le dossier disparaît dans un tiroir verrouillé — mais la question, elle, continuera de te ronger.",choices:[{label:"Continuer",next:"e1_betrayal"}]},
-d1_conditions:{text:"« Je le prends, » dis-tu, « mais je veux savoir ce que vous attendez de moi en échange. » Voss esquisse un sourire rare, presque satisfait. « Voilà une question de soldat qui compte survivre longtemps ici. » Il ne répond pas directement — mais à partir de cet instant, tu sens qu'il te considère différemment : comme un pion utile, ou un allié potentiel.",effects:g=>{g.flags.trustVoss+=1},choices:[{label:"Continuer",next:"e1_betrayal"}]},
-
-e1_betrayal:{text:"La vérité, tu la tiens désormais, en partie ou en totalité : Valgard abrite en secret le <i>Projet Aube</i>, un programme militaire cherchant à transformer des sujets humains — volontaires, prisonniers, parfois de simples citoyens disparus dans la nuit — en armes vivantes aussi monstrueuses que les créatures qui rôdent au-delà des murs. Certains essais ont réussi. Beaucoup ont échoué, dans d'atroces souffrances tues à la population. Le convoi que tu as vu, le civil hagard sur la place, les rumeurs de gens qui « changent » — tout se recoupe, tout devient limpide et insoutenable à la fois.",choices:[
- {label:"Exposer la vérité publiquement, quel qu'en soit le prix",next:"f1_expose",effects:g=>{g.flags.exposedTruth=true;g.traits.compassion+=2;g.traits.loyalty-=2}},
- {label:"Rassembler discrètement plus de preuves avant d'agir",next:"f1_evidence",effects:g=>{g.traits.cunning+=2}},
- {label:"Faire remonter l'information à la hiérarchie, dans les règles",next:"f1_chain",effects:g=>{g.traits.loyalty+=2}},
- {label:"Te porter volontaire pour rejoindre le programme de l'intérieur",next:"f1_join",effects:g=>{g.flags.joinedProgram=true;g.traits.cunning+=1;g.traits.courage+=1}}
+training_social:{
+text:`Tu observes les groupes se former. Jean et Eren se provoquent. Sasha essaie de cacher de la nourriture. Connie plaisante pour détendre l'atmosphère. Historia reste discrète.<br><br>
+Reiner semble toujours prêt à aider. Bertholdt parle peu. Annie garde ses distances.<br><br>
+Tu comprends que les recrues cachent toutes quelque chose. Toi aussi.`,
+choices:[
+{label:"Te rapprocher du groupe d'Eren",next:"training_test",effects:g=>g.traits.loyalty++},
+{label:"Rester neutre et observer",next:"training_test",effects:g=>g.traits.cunning+=2}
 ]},
-f1_expose:{text:"Tu choisis la voie la plus dangereuse : la vérité, criée haut et fort sur la place centrale, devant une foule d'abord incrédule puis rapidement paniquée. En quelques heures, Valgard bascule dans le chaos — émeutes, arrestations, une partie de la garnison qui se retourne contre le commandement. Voss te fait arrêter le soir même, le regard plus triste que furieux. « Tu as peut-être sauvé des vies futures. Tu en as aussi condamné beaucoup, aujourd'hui même. » Sael, s'il est ton allié, prend un risque terrible pour t'aider à t'échapper des cachots avant le jugement.",effects:g=>{g.traits.compassion+=1},choices:[{label:"Continuer",next:"g1_cost"}]},
-f1_evidence:{text:"Tu joues la carte de la patience, recoupant discrètement témoignages, registres de livraisons et disparitions inexpliquées, nuit après nuit, au péril d'être découvert·e à chaque instant. Le dossier que tu constitues, méthodique et accablant, pourrait faire tomber le programme entier — à condition de trouver le bon moment, et la bonne personne à qui le confier.",effects:g=>{g.traits.cunning+=1},choices:[{label:"Continuer",next:"g1_cost"}]},
-f1_chain:{text:"Tu suis la voie officielle, remontant l'information par les canaux hiérarchiques appropriés, en évitant soigneusement tout éclat public. La réponse est lente, feutrée, presque décevante : une commission d'enquête discrète est ouverte, sans grand bruit ni grande conséquence immédiate. Voss t'observe avec un respect nouveau. « C'est ainsi qu'on change les choses sans tout faire s'effondrer, recrue. Parfois. »",effects:g=>{g.flags.trustVoss+=2},choices:[{label:"Continuer",next:"g1_cost"}]},
-f1_join:{text:"Tu te portes volontaire, officiellement pour « mieux comprendre le programme de l'intérieur » — officieusement, pour savoir jusqu'où tu es prêt·e à aller. Les chercheurs t'accueillent avec une froideur clinique, et pour la première fois, tu vois de tes propres yeux le processus complet : la douleur, les cris, les rares succès applaudis comme des victoires militaires alors qu'il s'agit de vies brisées. Une part de toi ne s'en remettra jamais tout à fait.",effects:g=>{g.traits.cunning+=1;g.traits.compassion-=1},choices:[{label:"Continuer",next:"g1_cost"}]},
-
-g1_cost:{text:g=>{
-if(g.flags.exposedTruth)return "Dans le chaos qui a suivi ta révélation, une émeute éclate près des entrepôts. Yuna, toujours prompte à se porter au secours des civils pris au piège, se retrouve isolée face à une patrouille hostile qui l'accuse de complicité. Sael, s'il te considère comme un allié, se précipite pour la couvrir — au prix d'une blessure profonde qui le clouera au lit pour des semaines.";
-if(g.flags.joinedProgram)return "Un des sujets du programme, autrefois un simple pêcheur du village voisin, échappe partiellement au contrôle des chercheurs durant une phase de transformation. La panique est brève mais terrible ; l'homme, ou ce qu'il en reste, est abattu avant d'avoir pu faire de mal à quiconque. Tu comprends alors, avec une clarté glaçante, que ce que tu as accepté de voir de près a un prix humain que personne ne te fera jamais oublier.";
-return "Une attaque isolée frappe un poste de garde avancé durant la nuit — une créature échappée du programme, désorientée et dangereuse, sème la panique avant d'être maîtrisée de justesse. Personne n'est mort, cette fois. Mais la question qui plane sur Valgard depuis le début vient de devenir, pour la première fois, terriblement concrète pour tout le monde autour de toi.";
-},choices:[
- {label:"Te porter en première ligne pour limiter les dégâts",next:"h1_power_offer",effects:g=>{g.traits.courage+=2;g.flags.protectedEveryone=true}},
- {label:"Rester en retrait et laisser les unités spécialisées gérer",next:"h1_power_offer",effects:g=>{g.traits.cunning+=1}}
+family_training:{
+text:g=>`Un membre de ta famille vient te voir discrètement. Il te rappelle le nom <b>${esc(FAMILIES[g.flags.family].name)}</b> et te dit que certaines familles ont traversé l'histoire en survivant grâce au silence.<br><br>
+Tu demandes si ton sang possède quelque chose de particulier. La réponse est étrange : « Peut-être. Mais si tu découvres quelque chose, décide toi-même de ce que tu veux en faire. »<br><br>
+Tu repars avec plus de questions que de réponses.`,
+choices:[
+{label:"Garder cela pour toi",next:"training_test",effects:g=>g.traits.loyalty++},
+{label:"Chercher des informations dans les archives",next:"training_test",effects:g=>g.traits.cunning+=2}
 ]},
-
-h1_power_offer:{text:"Dans les jours qui suivent, alors que la tension à Valgard atteint son point de rupture, Voss te convoque une dernière fois — seul, sans témoin. « Le programme a besoin d'un sujet volontaire, conscient, capable de garder le contrôle là où tant d'autres ont échoué. Quelqu'un comme toi. Ce serait un pouvoir terrible. Peut-être suffisant pour changer le cours de cette guerre — ou pour te perdre toi-même. » Il attend ta réponse sans ciller.",choices:[
- {label:"Accepter — devenir toi-même l'arme que Valgard cherche",next:"i1_accept",effects:g=>{g.flags.acceptedPower=true;g.traits.courage+=2}},
- {label:"Refuser catégoriquement ce pouvoir et tout ce qu'il représente",next:"i1_refuse",effects:g=>{g.traits.compassion+=2}},
- {label:"Refuser pour toi, mais proposer que le programme soit encadré et surveillé plutôt qu'arrêté",next:"i1_reform",effects:g=>{g.traits.cunning+=2;g.traits.loyalty+=1}}
+training_test:{
+text:`Le jour du test arrive. Chaque recrue doit prouver qu'elle peut fonctionner sous pression.<br><br>
+Tu aperçois Eren lutter. Mikasa est déjà concentrée. Armin doute de lui-même. Jean hésite entre ses ambitions et la réalité. Reiner pousse les autres à continuer.<br><br>
+Quand vient ton tour, tu inspires profondément. Tout ce que tu as vécu depuis Shiganshina revient en mémoire.`,
+choices:[
+{label:"Faire confiance à ton instinct",next:"graduation",effects:g=>g.traits.courage+=2},
+{label:"Analyser chaque mouvement",next:"graduation",effects:g=>g.traits.cunning+=2},
+{label:"Aider une autre recrue avant de finir",next:"graduation",effects:g=>g.traits.compassion+=2}
 ]},
-i1_accept:{text:"Tu acceptes. La transformation, quand elle vient, est une douleur au-delà de tout ce que tu avais imaginé — un feu qui remonte chaque veine, un cri qui n'est plus tout à fait le tien. Mais tu gardes le contrôle, contre toute attente, contre toute probabilité. Quand tes yeux se rouvrent, quelque chose en toi a changé pour toujours. Tu es devenu·e exactement ce que Valgard espérait : une arme. La question qui reste, c'est de savoir à qui cette arme obéira, désormais.",choices:[{label:"Affronter ce que tu es devenu·e",next:"final"}]},
-i1_refuse:{text:"« Non, » dis-tu, sans une once d'hésitation. « Pas comme ça. Pas sur le dos d'autres vies brisées avant la mienne. » Voss encaisse ton refus sans un mot, mais quelque chose dans son regard te dit qu'il s'y attendait, presque qu'il l'espérait. Le programme continuera peut-être sans toi — mais toi, au moins, tu restes entier·e.",choices:[{label:"Continuer",next:"final"}]},
-i1_reform:{text:"« Arrêtez de chercher des armes, » proposes-tu, « et commencez à chercher un remède, ou au moins un cadre éthique digne de ce nom. » C'est un pari risqué, à mi-chemin entre la compromission et l'espoir. Voss te regarde longuement, comme s'il soupesait réellement ta proposition pour la première fois depuis que tu le connais. « Peut-être, » dit-il enfin, « que c'est exactement ce dont Valgard avait besoin depuis le début : quelqu'un qui refuse de choisir entre les deux extrêmes. »",choices:[{label:"Continuer",next:"final"}]},
-
-final:{text:"Les années passent. Valgard tient toujours debout, cicatrice après cicatrice, secret après secret. Ce que tu es devenu·e dans cette forteresse — soldat loyal, ombre manipulatrice, arme vivante, ou simple témoin ayant refusé de détourner le regard — c'est désormais une histoire qu'on raconte, avec plus ou moins d'exactitude, dans les tavernes et les casernes.",choices:[
- {label:"Découvrir comment ton histoire s'est terminée",action:()=>showEnding()}
-]}
+graduation:{
+text:`La cérémonie de fin approche. Vous savez tous qu'un choix vous attend : Garnison, Police militaire ou Bataillon d'exploration.<br><br>
+Tu entends les arguments des autres. Eren veut aller dehors. Jean veut une vie sûre. Armin rêve encore de l'extérieur. Mikasa reste proche d'Eren.<br><br>
+Toi, tu dois choisir sans savoir que cette décision va t'emmener au cœur d'une guerre que personne ne comprend encore.`,
+choices:[
+{label:"Bataillon d'exploration",next:"trost_before",effects:g=>g.traits.courage+=2},
+{label:"Garnison",next:"trost_before",effects:g=>g.traits.loyalty+=2},
+{label:"Police militaire",next:"trost_before",effects:g=>g.traits.cunning+=2}
+]},
+trost_before:{
+text:`<i>District de Trost.</i><br><br>
+Le jour où les Titans apparaissent, tu es en poste. Tu n'as presque pas le temps de comprendre. Un Titan franchit la ligne défensive et les recrues sont séparées.<br><br>
+Les ordres deviennent confus. La peur gagne les rues. Puis tu aperçois Eren se battre pour permettre à d'autres de s'échapper.<br><br>
+Quelque chose d'impossible se prépare, mais personne ne le sait encore.`,
+choices:[
+{label:"Suivre les ordres et sécuriser les civils",next:"trost_chaos",effects:g=>g.traits.loyalty+=2},
+{label:"Rejoindre Eren",next:"trost_chaos",effects:g=>g.traits.courage+=2},
+{label:"Chercher Armin et les autres",next:"trost_chaos",effects:g=>g.traits.compassion++}
+]},
+trost_chaos:{
+text:g=>{maybeAwakenTitan("trost_chaos"); return `Les rues sont devenues un labyrinthe. Tu dois te déplacer vite, mais surtout choisir où ton aide sera la plus utile.<br><br>
+Un cri retentit. Puis un silence étrange. Au loin, un Titan semble combattre d'autres Titans.<br><br>
+Tu comprends que quelque chose vient de changer. Si <b>${esc(G.name)}</b> possède lui aussi un pouvoir qui dormait jusque-là, ton corps commence peut-être à réagir. Sinon, tu restes témoin d'un événement qui bouleverse l'humanité.<br><br>
+Dans tous les cas, tu dois agir maintenant.`},
+choices:[
+{label:"Aider les survivants",next:"trost_aftermath",effects:g=>g.traits.compassion+=2},
+{label:"Suivre le Titan mystérieux",next:"trost_aftermath",effects:g=>g.traits.cunning+=2},
+{label:"Retrouver Mikasa et Armin",next:"trost_aftermath",effects:g=>g.traits.loyalty++}
+]},
+trost_aftermath:{
+text:g=>`Après la bataille, les soldats découvrent l'impensable : Eren peut prendre une forme de Titan.<br><br>
+Si ton propre pouvoir s'est éveillé, tu gardes ton secret. Si ce n'est pas le cas, la révélation d'Eren change ta façon de voir le monde.<br><br>
+Armin cherche des explications. Mikasa reste près d'Eren. Les officiers veulent des réponses. Tu sens que la prochaine décision pourrait déterminer la vie de milliers de personnes.`,
+choices:[
+{label:"Proposer de protéger Eren",next:"tribunal",effects:g=>g.traits.loyalty++},
+{label:"Demander à étudier les pouvoirs de Titan",next:"tribunal",effects:g=>g.traits.cunning+=2},
+{label:"Rester en retrait",next:"tribunal",effects:g=>g.traits.courage++}
+]},
+tribunal:{
+text:g=>`Le procès d'Eren divise les militaires. D'un côté, ceux qui voient en lui une menace. De l'autre, ceux qui pensent qu'il peut devenir une arme contre les Titans.<br><br>
+Levi intervient. Son attitude ne laisse presque aucune place au doute : Eren sera surveillé.<br><br>
+Ton propre nom attire un regard supplémentaire. Un officier te demande directement si ta famille a déjà eu des contacts avec des événements similaires.<br><br>
+Tu dois répondre.`,
+choices:[
+{label:"Dire la vérité sur ce que tu sais",next:"scouts",effects:g=>g.traits.courage+=2},
+{label:"Répondre seulement à la question",next:"scouts",effects:g=>g.traits.cunning++},
+{label:"Protéger le secret familial",next:"scouts",effects:g=>g.traits.loyalty+=2}
+]},
+scouts:{
+text:`Le Bataillon d'exploration devient ton nouveau monde. Erwin Smith dirige avec une logique froide. Hange Zoe pose des questions sans fin. Levi observe tout.<br><br>
+Tu participes à des missions qui semblent simples jusqu'au moment où un détail change tout.<br><br>
+Peu à peu, tu apprends à lire une carte, à économiser ton gaz, à reconnaître les signes de danger et à revenir vivant sans abandonner tes camarades.`,
+choices:[
+{label:"Demander à Hange de t'apprendre à analyser les Titans",next:"hange_research",effects:g=>g.traits.cunning+=2},
+{label:"T'entraîner avec Levi",next:"levi_training",effects:g=>g.traits.courage+=2},
+{label:"Aider les nouvelles recrues",next:"scouts_life",effects:g=>g.traits.compassion+=2}
+]},
+hange_research:{
+text:`Hange te montre des notes, des schémas et des observations. Rien n'est simple. Les Titans semblent suivre des règles, mais certaines exceptions détruisent les théories les plus solides.<br><br>
+Si tu possèdes un Titan, Hange commence à soupçonner que ton pouvoir pourrait fournir des informations précieuses. Tu n'es pas obligé de révéler tout ce que tu sais.<br><br>
+Hange te demande simplement : « Tu veux comprendre, ou tu veux seulement survivre ? »`,
+choices:[
+{label:"Comprendre, même si c'est dangereux",next:"expedition_first",effects:g=>g.traits.cunning+=2},
+{label:"Survivre avant tout",next:"expedition_first",effects:g=>g.traits.courage++}
+]},
+levi_training:{
+text:`Levi te corrige sans détour. Tes gestes sont trop larges. Ton regard est trop fixé sur la cible. Tu dois apprendre à bouger avant même de décider consciemment.<br><br>
+Après plusieurs essais, tu réussis une manœuvre correcte. Levi ne te félicite pas vraiment, mais son silence est presque une validation.<br><br>
+Tu comprends que la discipline peut être aussi importante que le talent.`,
+choices:[
+{label:"Recommencer jusqu'à réussir",next:"expedition_first",effects:g=>g.traits.courage+=2},
+{label:"Demander pourquoi tu faisais erreur",next:"expedition_first",effects:g=>g.traits.cunning++}
+]},
+scouts_life:{
+text:`La vie au sein du Bataillon n'est pas faite uniquement de combats. Il faut nettoyer, réparer, manger ensemble, partager les informations et apprendre les noms des personnes à côté desquelles tu risques ta vie.<br><br>
+Sasha te fait rire malgré elle. Connie pose trop de questions. Jean parle de stratégie. Armin écoute énormément.<br><br>
+Tu commences à avoir quelque chose que tu n'avais pas depuis la chute de Shiganshina : une nouvelle famille.`,
+choices:[
+{label:"Créer des liens avec eux",next:"expedition_first",effects:g=>g.traits.loyalty+=2},
+{label:"Rester concentré sur ta mission",next:"expedition_first",effects:g=>g.traits.courage++}
+]},
+expedition_first:{
+text:`La première grande expédition arrive. Les portes s'ouvrent et le monde extérieur apparaît.<br><br>
+Les formations s'étendent dans la plaine. Tu ressens la peur, mais aussi quelque chose d'autre : la sensation d'être enfin sorti de la cage dont Eren parlait enfant.<br><br>
+Puis un signal change la direction de la formation. Les Titans se rapprochent.<br><br>
+Tu dois décider où te placer.`,
+choices:[
+{label:"Rester avec l'équipe principale",next:"forest_choice",effects:g=>g.traits.loyalty++},
+{label:"Suivre l'équipe d'Armin",next:"forest_choice",effects:g=>g.traits.cunning++},
+{label:"Protéger les soldats les plus faibles",next:"forest_choice",effects:g=>g.traits.compassion+=2}
+]},
+forest_choice:{
+text:g=>{maybeAwakenTitan("forest_choice"); return `La forêt devient silencieuse. Les arbres cachent la formation et rendent chaque décision plus difficile.<br><br>
+Tu entends parler d'une Titan mystérieuse qui semble chercher Eren avec une précision inquiétante. Levi et les autres comprennent qu'il ne s'agit pas d'une attaque ordinaire.<br><br>
+Si ton pouvoir de Titan existe, tu sens que le moment approche où le cacher pourrait devenir aussi dangereux que le révéler.<br><br>
+Une silhouette apparaît entre les arbres.`},
+choices:[
+{label:"Suivre le plan d'Erwin",next:"female_titan",effects:g=>g.traits.loyalty+=2},
+{label:"Préparer ton propre plan",next:"female_titan",effects:g=>g.traits.cunning+=2},
+{label:"Rester auprès de tes camarades",next:"female_titan",effects:g=>g.traits.compassion++}
+]},
+female_titan:{
+text:`L'identité de l'ennemi commence à se dessiner. Annie Leonhart, une ancienne camarade d'entraînement, est liée aux événements.<br><br>
+Tu repenses aux jours du camp. Certains détails prennent soudain un autre sens : ses réactions, sa distance, sa façon de se battre.<br><br>
+Le Bataillon doit agir vite. Tu n'as pas le pouvoir de changer tous les événements, mais tu peux choisir ce que tu fais au milieu d'eux.`,
+choices:[
+{label:"Aider à capturer Annie",next:"stohess",effects:g=>g.traits.loyalty+=2},
+{label:"Chercher des preuves avant d'agir",next:"stohess",effects:g=>g.traits.cunning+=2},
+{label:"Protéger les habitants",next:"stohess",effects:g=>g.traits.compassion+=2}
+]},
+stohess:{
+text:`Stohess devient le théâtre d'un affrontement que personne n'oubliera. Annie est finalement confrontée à ceux qui la soupçonnent.<br><br>
+Tu aides à évacuer les rues et à transmettre les ordres. Quand tout se calme, une nouvelle question apparaît : si un ennemi pouvait se cacher parmi les recrues, combien d'autres secrets restent enfouis ?<br><br>
+Erwin annonce que la prochaine étape sera politique.`,
+choices:[
+{label:"Suivre Erwin",next:"royal_politics",effects:g=>g.traits.loyalty++},
+{label:"Chercher des informations",next:"royal_politics",effects:g=>g.traits.cunning+=2}
+]},
+royal_politics:{
+text:`Les murs ne sont pas seulement protégés par des soldats. Ils sont gouvernés par des intérêts, des familles et des secrets.<br><br>
+Le nom Reiss revient encore et encore. Historia doit faire face à un héritage qu'elle n'avait pas demandé.<br><br>
+Ton propre nom familial peut désormais changer la façon dont certains nobles ou militaires te parlent. Tu comprends que la guerre n'est pas uniquement une question de Titans.`,
+choices:[
+{label:"Soutenir Historia",next:"uprising_start",effects:g=>g.traits.compassion+=2},
+{label:"Aider Erwin à obtenir des preuves",next:"uprising_start",effects:g=>g.traits.cunning+=2},
+{label:"Rester avec Levi",next:"uprising_start",effects:g=>g.traits.loyalty+=2}
+]},
+uprising_start:{
+text:`La situation politique explose. Le pouvoir en place cherche à contrôler Eren et Historia. Erwin prépare un plan risqué.<br><br>
+Levi, Hange et les autres doivent agir avec peu de certitudes. Toi aussi.<br><br>
+Tu découvres que les adultes qui semblaient tout contrôler sont eux-mêmes prisonniers d'un système qu'ils ne comprennent pas complètement.`,
+choices:[
+{label:"Participer à l'opération",next:"underground",effects:g=>g.traits.courage+=2},
+{label:"Collecter les informations",next:"underground",effects:g=>g.traits.cunning+=2}
+]},
+underground:{
+text:`Sous les rues, les tensions montent. Tu dois suivre des personnes que tu ne connais pas, identifier les alliés et éviter de faire confiance trop vite.<br><br>
+Levi te demande de rester attentif. Hange t'envoie des informations contradictoires. Historia se retrouve au centre du conflit.<br><br>
+Tu comprends que ta famille et les secrets qu'elle t'a laissés pourraient enfin avoir une utilité — ou devenir un danger.`,
+choices:[
+{label:"Faire confiance à Levi",next:"historia_choice",effects:g=>g.traits.loyalty+=2},
+{label:"Vérifier chaque information",next:"historia_choice",effects:g=>g.traits.cunning+=2}
+]},
+historia_choice:{
+text:g=>`Historia doit choisir qui elle veut devenir. Tu lui parles brièvement, sans lui imposer ta décision.<br><br>
+Tu lui expliques que ton propre nom de famille t'a parfois donné l'impression d'être défini avant même d'avoir choisi qui tu voulais être.<br><br>
+Elle comprend. Cette conversation ne change pas l'histoire du monde, mais elle change votre relation.`,
+choices:[
+{label:"Lui dire qu'elle doit choisir pour elle-même",next:"uprising_end",effects:g=>g.traits.compassion+=2},
+{label:"Lui rappeler son devoir envers les autres",next:"uprising_end",effects:g=>g.traits.loyalty+=2}
+]},
+uprising_end:{
+text:`Le pouvoir change de mains. Historia devient reine. Erwin et les soldats gagnent un peu d'espace pour agir.<br><br>
+Mais la victoire politique ne résout pas le problème des Titans. Des indices pointent vers les murs, vers Shiganshina et vers une maison qui contient peut-être des réponses.<br><br>
+Tu te prépares à retourner là où ton enfance s'est terminée.`,
+choices:[
+{label:"Partir pour Shiganshina",next:"return_prepare",effects:g=>g.traits.courage+=2},
+{label:"Préparer les réserves et le ravitaillement",next:"return_prepare",effects:g=>g.traits.loyalty++}
+]},
+return_prepare:{
+text:`Les préparatifs durent plusieurs jours. Armin étudie les cartes. Jean organise les unités. Mikasa reste concentrée. Eren pense au sous-sol.<br><br>
+Levi vérifie ton équipement et te demande si tu as peur.<br><br>
+Tu réponds honnêtement. Oui. Mais tu pars quand même.<br><br>
+La nuit précédant le départ, tu rêves de Shiganshina.`,
+choices:[
+{label:"Te lever et vérifier ton équipement",next:"return_charge",effects:g=>g.traits.courage++},
+{label:"Dormir pour être prêt",next:"return_charge",effects:g=>g.traits.loyalty++}
+]},
+return_charge:{
+text:g=>{maybeAwakenTitan("return_charge"); return `Le retour vers Shiganshina commence.<br><br>
+La ville apparaît au loin. Les souvenirs reviennent avec une précision douloureuse. Erwin donne les ordres. La bataille devient inévitable.<br><br>
+Reiner, Bertholdt et Zeke sont liés à ce qui vous attend. Eren et Armin vont devoir prendre des décisions impossibles.<br><br>
+Si tu possèdes un Titan, ton secret devient de plus en plus difficile à cacher. Si tu n'en possèdes pas, tu dois trouver une autre façon de survivre.`},
+choices:[
+{label:"Rester avec l'unité de Levi",next:"shiganshina_battle",effects:g=>g.traits.loyalty++},
+{label:"Aider Armin à analyser la situation",next:"shiganshina_battle",effects:g=>g.traits.cunning+=2},
+{label:"Protéger les soldats blessés",next:"shiganshina_battle",effects:g=>g.traits.compassion+=2}
+]},
+shiganshina_battle:{
+text:g=>`La bataille est totale. Les Titans ennemis encerclent les positions. Le plan d'Erwin exige du courage.<br><br>
+Tu assistes aux décisions d'Eren, Armin, Levi et des autres sans prendre leur place. Ton propre rôle devient pourtant essentiel : une information que tu as remarquée peut sauver une unité, et ton choix peut modifier qui reste avec toi.<br><br>
+Au milieu du chaos, tu dois décider où aller.`,
+choices:[
+{label:"Rejoindre Levi",next:"serum_choice",effects:g=>g.traits.courage++},
+{label:"Rejoindre Armin et Eren",next:"serum_choice",effects:g=>g.traits.loyalty++},
+{label:"Aider les survivants",next:"serum_choice",effects:g=>g.traits.compassion+=2}
+]},
+serum_choice:{
+text:g=>`Après la bataille, le nombre de survivants est terriblement faible. Un choix concernant le Titan Colossal et le sérum devient l'un des moments les plus difficiles de votre génération.<br><br>
+Tu comprends que tu ne peux pas décider à la place de Levi. Tu peux seulement lui donner ton avis et accepter les conséquences.<br><br>
+Le sous-sol de Grisha Yeager vous attend toujours.`,
+choices:[
+{label:"Dire que le choix doit préserver l'avenir",next:"basement",effects:g=>g.traits.cunning++},
+{label:"Dire que le choix doit honorer les sacrifices",next:"basement",effects:g=>g.traits.loyalty++},
+{label:"Ne pas influencer la décision",next:"basement",effects:g=>g.traits.courage++}
+]},
+basement:{
+text:g=>`La porte du sous-sol s'ouvre enfin.<br><br>
+Les livres et les documents de Grisha révèlent que l'humanité ne vit pas seule dans le monde. Les murs ne sont pas le début de l'histoire : ils sont une partie d'un conflit beaucoup plus ancien.<br><br>
+Tu lis les informations plusieurs fois. Ton propre nom familial apparaît dans une référence qui te glace.<br><br>
+Quelqu'un de ta famille savait que ces vérités existaient.`,
+choices:[
+{label:"Chercher la référence concernant ta famille",next:"family_truth",effects:g=>g.traits.cunning+=2},
+{label:"Te concentrer sur l'histoire d'Eldia et Marley",next:"world_truth",effects:g=>g.traits.cunning++}
+]},
+family_truth:{
+text:g=>`La référence est courte, presque cryptique. Elle ne dit pas que ta famille possède un pouvoir secret précis. Elle indique seulement qu'une branche de ta famille a été mêlée à des événements liés aux Titans.<br><br>
+Tu comprends enfin pourquoi certaines discussions étaient interrompues quand tu entrais dans la pièce.<br><br>
+Ce secret ne te donne pas automatiquement une destinée. Il te donne une question : qu'est-ce que tu veux faire de ce que tu sais ?`,
+choices:[
+{label:"Protéger ta famille",next:"ocean",effects:g=>g.traits.loyalty+=2},
+{label:"Partager la vérité avec les autres",next:"world_truth",effects:g=>g.traits.courage+=2}
+]},
+world_truth:{
+text:`Les révélations changent tout. Marley existe. Eldia existe. Le monde extérieur n'est pas un paradis ni un simple ennemi : il est composé de peuples, d'États, de familles et de personnes qui ont chacune leur histoire.<br><br>
+Armin pense à l'océan. Eren regarde au loin.<br><br>
+Tu réalises que la liberté dont vous rêviez enfants est beaucoup plus compliquée que vous ne l'imaginiez.`,
+choices:[
+{label:"Aller voir l'océan",next:"ocean"},
+{label:"Continuer à étudier les documents",next:"world_research",effects:g=>g.traits.cunning+=2}
+]},
+world_research:{
+text:`Tu passes du temps avec Armin et Hange à comparer les informations. Vous ne trouvez pas toutes les réponses, mais vous éliminez plusieurs hypothèses.<br><br>
+Ton rôle devient celui d'un enquêteur de terrain : tu relies les détails que d'autres ignorent.<br><br>
+Une conclusion s'impose : la prochaine étape ne sera pas uniquement militaire. Il faudra comprendre Marley et ce qui se passe au-delà de l'océan.`,
+choices:[
+{label:"Préparer une mission de reconnaissance",next:"ocean"},
+{label:"Aider Hange à classer les informations",next:"ocean",effects:g=>g.traits.cunning++}
+]},
+ocean:{
+text:`Le rivage apparaît enfin.<br><br>
+Armin sourit. Mikasa regarde l'horizon. Eren reste silencieux. Pour toi, l'océan représente à la fois la liberté et une nouvelle frontière.<br><br>
+Tu touches l'eau et repenses au petit enfant qui regardait les murs de Shiganshina.<br><br>
+Mais tu comprends quelque chose : l'histoire ne s'arrête pas lorsque l'on atteint son rêve. Parfois, c'est précisément à ce moment-là qu'un nouveau chapitre commence.`,
+choices:[
+{label:"Rester avec tes camarades",next:"marley_shadow",effects:g=>g.traits.loyalty++},
+{label:"Observer l'horizon",next:"marley_shadow",effects:g=>g.traits.cunning++}
+]},
+marley_shadow:{
+text:`Les années suivantes sont différentes. Le monde extérieur n'est plus une légende. Des informations arrivent sur Marley, sur les guerriers et sur les conflits qui les entourent.<br><br>
+Reiner, Zeke, Annie et les autres ne sont plus seulement des noms de l'entraînement : ils sont liés à une histoire internationale complexe.<br><br>
+Tu sens que la paix ne tient qu'à quelques décisions.`,
+choices:[
+{label:"Chercher une voie diplomatique",next:"marley_contact",effects:g=>g.traits.cunning+=2},
+{label:"Préparer ton unité à une nouvelle guerre",next:"marley_contact",effects:g=>g.traits.courage+=2}
+]},
+marley_contact:{
+text:`Ton travail t'amène à rencontrer des personnes qui ne partagent pas ton histoire. Certaines ont peur des Eldiens. D'autres détestent Marley. D'autres encore veulent simplement vivre.<br><br>
+Tu comprends que les mots peuvent parfois être aussi dangereux que les armes.<br><br>
+Une information arrive : Eren prépare quelque chose. Personne ne sait exactement quoi.`,
+choices:[
+{label:"Prévenir Armin et Mikasa",next:"war_start",effects:g=>g.traits.loyalty+=2},
+{label:"Chercher à comprendre Eren avant d'agir",next:"war_start",effects:g=>g.traits.cunning+=2},
+{label:"Protéger les civils",next:"war_start",effects:g=>g.traits.compassion+=2}
+]},
+war_start:{
+text:`L'attaque commence. Les événements s'enchaînent rapidement et les anciens camarades se retrouvent de nouveau face à face.<br><br>
+Tu ne peux pas empêcher chaque décision des personnages principaux, mais tu peux sauver des personnes, transmettre des informations et choisir les alliés auxquels tu accordes ta confiance.<br><br>
+Ton Titan, s'il s'est éveillé, est désormais impossible à ignorer. Sinon, tu dois compter sur ton entraînement et tes choix.`,
+choices:[
+{label:"Combattre pour protéger les survivants",next:"war_aftermath",effects:g=>g.traits.courage+=2},
+{label:"Organiser une évacuation",next:"war_aftermath",effects:g=>g.traits.compassion+=2},
+{label:"Chercher les informations derrière l'attaque",next:"war_aftermath",effects:g=>g.traits.cunning+=2}
+]},
+war_aftermath:{
+text:`Après l'affrontement, les alliances sont brisées. Certains camarades veulent suivre Eren. D'autres veulent l'arrêter. Armin et Mikasa sont pris entre leur passé et leurs convictions.<br><br>
+Tu dois enfin répondre à une question que ta famille t'avait posée des années auparavant : qui veux-tu être lorsque ton nom ne suffit plus à te définir ?`,
+choices:[
+{label:"Choisir tes camarades",next:"final_conflict",effects:g=>g.traits.loyalty+=2},
+{label:"Choisir ce que tu crois juste",next:"final_conflict",effects:g=>g.traits.courage+=2},
+{label:"Chercher une solution qui évite davantage de pertes",next:"final_conflict",effects:g=>g.traits.compassion+=2}
+]},
+final_conflict:{
+text:g=>`Le dernier conflit approche. Le monde entier semble suspendu à quelques personnes et à des pouvoirs qui dépassent les individus.<br><br>
+Tu retrouves Eren, Mikasa, Armin et tes anciens camarades. Tu ne leur voles pas leur histoire. Tu es simplement là, avec ton propre passé, ta famille et les choix qui t'ont conduit jusqu'ici.<br><br>
+Si tu as un Titan, tu dois décider si tu l'utilises pour aider, pour défendre quelqu'un ou pour retenir ton pouvoir. Si tu n'en as pas, ton rôle peut être tout aussi important.`,
+choices:[
+{label:"Utiliser ton pouvoir pour protéger",next:"last_choice",effects:g=>{g.traits.courage+=2;g.traits.compassion++}},
+{label:"Refuser d'utiliser le Titan",next:"last_choice",effects:g=>g.traits.cunning++},
+{label:"Rester aux côtés de tes camarades",next:"last_choice",effects:g=>g.traits.loyalty+=2}
+]},
+last_choice:{
+text:g=>`Tout ce que tu as vécu revient en mémoire : Shiganshina, l'entraînement, Trost, les expéditions, Annie, Historia, le sous-sol, l'océan et le monde extérieur.<br><br>
+Tu comprends enfin que ton histoire n'a jamais été une course pour devenir « le plus fort ». Elle était une suite de décisions prises avec des informations incomplètes.<br><br>
+Devant toi se trouve ton dernier choix.`,
+choices:[
+{label:"Protéger ceux qui sont encore là",next:"epilogue",effects:g=>{g.traits.compassion+=2;g.flags.protectedEveryone=true}},
+{label:"Dire toute la vérité que tu connais",next:"epilogue",effects:g=>{g.traits.cunning+=2;g.flags.exposedTruth=true}},
+{label:"Rester fidèle à tes proches",next:"epilogue",effects:g=>{g.traits.loyalty+=2}}
+]},
+epilogue:{
+text:g=>`<i>Épilogue.</i><br><br>
+La guerre a laissé des traces partout, mais ton histoire ne se résume pas à une victoire ou une défaite.<br><br>
+Tu as grandi à Shiganshina. Tu as rencontré Eren, Mikasa et Armin avant que le monde ne bascule. Tu as combattu aux côtés de soldats comme Levi, Hange et Erwin. Tu as vu Historia devenir reine, tu as découvert le monde extérieur et tu as dû décider ce que ton nom familial signifiait pour toi.<br><br>
+${g.flags.titan?`Ton pouvoir de Titan a été l'un des secrets les plus importants de ton parcours. Tu l'as obtenu ${g.flags.titanSource==="start"?"dès le début de cette aventure":"au cours de l'histoire"}, et tu as appris que posséder un pouvoir ne dit jamais comment on doit l'utiliser.`:"Tu n'as jamais possédé de Titan. Pourtant, tu as trouvé d'autres façons d'être utile et de protéger les personnes auxquelles tu tenais."}<br><br>
+Ton histoire est désormais la tienne.`,
+choices:[{label:"Voir mon bilan",action:()=>showEnding()}]
+}
 };
 
 function sceneText_(sc,g){return typeof sc.text==="function"?sc.text(g):sc.text}
-function scene(id){let sc=STORY[id];if(!sc)return;G.currentScene=id;G.depth=Math.min(TOTAL_STEPS,G.depth+1);render()}
-function chooseOption(i){let sc=STORY[G.currentScene];let c=sc.choices[i];if(c.effects)c.effects(G);if(c.action){G.currentScene=null;c.action();return}if(c.next)scene(c.next)}
+function scene(id){
+ let sc=STORY[id];if(!sc)return;
+ G.currentScene=id;
+ G.depth=(G.depth||0)+1;
+ render();
+}
+function chooseOption(i){
+ let sc=STORY[G.currentScene];if(!sc)return;
+ let c=sc.choices[i];
+ if(c.effects)c.effects(G);
+ if(c.action){G.currentScene=null;c.action();return}
+ if(c.next)scene(c.next);
+}
 
 /* ================= INTERFACE ================= */
 function showCreateScreen(){
-document.getElementById("titleScreen").classList.add("hidden");
-let el=document.getElementById("createScreen");
-el.classList.remove("hidden");
-el.innerHTML=`<div class="createCard">
-<h2>Qui es-tu ?</h2><p class="sub">Le début de ton histoire, avant même d'arriver à Valgard.</p>
-<div class="form">
-<input id=n placeholder="Prénom / nom" maxlength=24>
-<button class="primary" onclick="finishCreate()">Commencer</button>
-</div></div>`;
-}
-function finishCreate(){
-let n=document.getElementById("n").value.trim();if(!n)return alert("Choisis un nom.");
-G.started=true;G.name=n;
-scene("intro");
-}
-function render(){
-if(!G.started){
-document.getElementById("continueBtn").classList.toggle("hidden",!localStorage.getItem(KEY));
-return;
-}
-document.getElementById("titleScreen").classList.add("hidden");
-document.getElementById("createScreen").classList.add("hidden");
-let app=document.getElementById("app");
-app.classList.remove("hidden");
-app.innerHTML=`
-<div class="progress">${Array.from({length:TOTAL_STEPS}).map((_,i)=>`<i class="${i<G.depth?"done":""}"></i>`).join("")}</div>
-<div class="storyWrap">${G.currentScene?storyCardHTML():""}</div>`;
-saveGame();
-}
-function storyCardHTML(){
-let sc=STORY[G.currentScene];
-return `<div class="storycard"><div class="storytext">${sceneText_(sc,G)}</div><div class="choices">${sc.choices.map((c,i)=>`<button onclick="chooseOption(${i})">${c.label}</button>`).join("")}</div></div>`;
+ document.getElementById("titleScreen").classList.add("hidden");
+ let el=document.getElementById("createScreen");
+ el.classList.remove("hidden");
+ el.innerHTML=`<div class="createCard">
+ <h2>Ton arrivée dans les Murs</h2>
+ <p class="sub">Une seule partie, un seul personnage. Ta famille est tirée au sort et ne change plus pendant l'histoire.</p>
+ <div class="form">
+ <input id=n placeholder="Prénom / nom" maxlength=24>
+ <button class="primary" onclick="finishCreate()">Entrer dans l'histoire</button>
+ <div id="familyInfo">Famille aléatoire : les familles fortes ont des chances plus élevées qu'avant, sans devenir garanties.</div>
+ <div id="saveHint">⚠️ Un pouvoir de Titan peut être présent dès le départ… ou apparaître plus tard pendant l'histoire. Il est possible de terminer sans en avoir.</div>
+ </div></div>`;
 }
 
-/* ================= FINS (5 fins entièrement écrites) ================= */
-function selectEnding(){
-let t=G.traits;
-if(G.flags.acceptedPower)return "power";
-if(G.flags.exposedTruth&&t.compassion>=t.loyalty)return "truth";
-if(G.flags.joinedProgram)return "shadow";
-if(G.flags.trustVoss>=2&&t.loyalty>=t.cunning&&t.loyalty>=t.compassion)return "commander";
-return "quiet";
+function finishCreate(){
+ let n=document.getElementById("n").value.trim();
+ if(!n)return alert("Choisis un nom.");
+ if(G.started)return;
+
+ G.started=true;
+ G.name=n;
+ G.flags.family=rollFamily();
+ G.flags.titan=false;
+ G.flags.titanType=null;
+ G.flags.titanSource=null;
+ G.flags.titanControl=0;
+ G.flags.canonTimeline=true;
+ G.currentScene="snk_arrival";
+ applyFamilyBuff();
+
+ // Une partie des personnages commencent déjà avec le pouvoir latent.
+ if(rollTitanAtStart()) awakenTitan("start");
+
+ logEvent("Début de l'histoire — famille "+FAMILIES[G.flags.family].name+".");
+ if(G.flags.titan)logEvent("Pouvoir de Titan présent dès le départ : "+G.flags.titanType+".");
+ scene("snk_arrival");
 }
-const ENDINGS={
-truth:{title:"La Vérité Brisée",badge:"Fin — Révélation",text:g=>`Ton nom est devenu synonyme de scandale, puis de courage, selon qui le prononce. La révélation du Projet Aube a coûté cher à Valgard : des mois de chaos, un commandement décapité, une confiance envers l'armée qu'il faudra une génération pour reconstruire. Mais plus jamais un civil ne disparaîtra en silence dans un bâtiment sans nom. ${g.flags.sael==="ally"?"Sael, resté fidèlement à tes côtés malgré le prix payé, est devenu l'un des rares officiers en qui la population place encore sa confiance.":"Tu as traversé cette tempête largement seul·e, et cette solitude ne t'a jamais vraiment quitté·e."} On te croise encore parfois près des remparts, regardant l'horizon, ni tout à fait héros ni tout à fait renégat·e — simplement quelqu'un qui a refusé de détourner le regard, quoi qu'il en coûte.`},
-power:{title:"Le Prix du Pouvoir",badge:"Fin — Transformation",text:g=>`Tu es devenu·e exactement ce que Valgard espérait : une arme consciente, capable de rivaliser avec les créatures qui rôdent au-delà des murs. Les batailles que tu as remportées depuis sont déjà légendaires — mais la légende a un prix. Les gens te regardent différemment désormais : avec un respect teinté de peur, une distance polie que même ${g.flags.sael==="ally"?"Sael n'a jamais réussi à combler entièrement, malgré ses efforts constants":"personne n'a jamais vraiment cherché à combler"}. Tu protèges Valgard, nuit après nuit, plus fort que quiconque avant toi. Mais certains soirs, seul·e face au silence de ta caserne, tu te demandes ce qu'il reste exactement d'humain dans ce que tu es devenu·e — et si quelqu'un, un jour, saura encore répondre à cette question à ta place.`},
-shadow:{title:"L'Ombre Silencieuse",badge:"Fin — Complicité",text:g=>`Tu as choisi de rester à l'intérieur du programme, d'en apprendre chaque rouage plutôt que de le combattre de l'extérieur. Avec le temps, tu en es devenu·e une pièce indispensable — celle qui sait où sont enterrés les vrais secrets, celle que même Voss consulte avant de prendre une décision. Ton pouvoir n'est pas celui d'un titan, mais celui, plus insidieux, de savoir. ${g.flags.trustVoss>=1?"Voss t'a fini par te considérer comme un successeur possible, ce qui n'est pas un compliment anodin de sa part.":"Tu as appris à te méfier de tout le monde, Voss y compris, et cette méfiance t'a probablement sauvé la vie plus d'une fois."} Valgard continue de tourner, ses secrets bien gardés, et toi au cœur de cette mécanique discrète — ni tout à fait complice, ni tout à fait innocent·e, quelque part entre les deux, pour toujours.`},
-commander:{title:"Le Bouclier de Valgard",badge:"Fin — Loyauté",text:g=>`Ta loyauté indéfectible envers la chaîne de commandement, jamais démentie même dans les moments les plus troubles, a fini par payer. Tu portes aujourd'hui les insignes d'officier, respecté·e par tes soldats autant que par tes supérieurs. Le Projet Aube a été discrètement réformé plutôt qu'exposé au grand jour — un compromis imparfait, mais un progrès réel, en grande partie grâce à ta capacité rare à garder la confiance de tout le monde à la fois. ${g.flags.sael==="ally"?"Sael sert aujourd'hui sous tes ordres, aussi fier de toi qu'insupportablement moqueur à ce sujet.":"Tu diriges avec une froideur efficace que même Sael, à distance, a fini par respecter."} Valgard tient debout. Et pour la première fois depuis longtemps, elle tient debout sans mentir tout à fait à ceux qui la défendent.`},
-quiet:{title:"Une Vie Parmi Tant d'Autres",badge:"Fin — Discrétion",text:g=>`Tu n'as jamais cherché à devenir une légende, et l'histoire de Valgard ne retiendra probablement pas ton nom. Tu as fait ton devoir, encaissé les secrets qu'on t'a confiés sans jamais vraiment les porter jusqu'au bout, ni dans un sens ni dans l'autre. C'est une vie plus tranquille que celle de bien des recrues arrivées en même temps que toi — certaines mortes, d'autres devenues des figures que l'on chuchote avec crainte ou admiration. ${g.flags.yunaStatus==="vivante"?"Yuna, elle, est restée une amie fidèle à travers toutes ces années, l'une des rares constantes dans une ville qui change sans cesse.":"Le souvenir de Yuna, elle, ne t'a jamais vraiment quitté."} Peut-être qu'au fond, ne pas devenir une légende est exactement la victoire la plus discrète, et la plus durable, que Valgard pouvait t'offrir.`}
-};
+
+function logEvent(t){
+ if(!G.history)G.history=[];
+ G.history.unshift(t);
+ G.history=G.history.slice(0,30);
+}
+
+function render(){
+ if(!G.started){
+   document.getElementById("continueBtn").classList.toggle("hidden",!localStorage.getItem(KEY));
+   return;
+ }
+ document.getElementById("titleScreen").classList.add("hidden");
+ document.getElementById("createScreen").classList.add("hidden");
+ let app=document.getElementById("app");
+ app.classList.remove("hidden");
+ const f=FAMILIES[G.flags.family];
+ app.innerHTML=`
+ <div id="uiBar">
+   <span>👤 ${esc(G.name)}</span>
+   <span>🏠 ${esc(f?.name||"Inconnue")}</span>
+   <span>📍 ${esc(G.flags.unit||"Civil")}</span>
+   ${G.flags.titan?`<span>⚡ ${esc(G.flags.titanType)}</span>`:""}
+ </div>
+ <div class="storyWrap">${G.currentScene?storyCardHTML():""}</div>`;
+ saveGame();
+}
+
+function storyCardHTML(){
+ let sc=STORY[G.currentScene];
+ return `<div class="storycard"><div class="storytext">${sceneText_(sc,G)}</div><div class="choices">${sc.choices.map((c,i)=>`<button onclick="chooseOption(${i})">${c.label}</button>`).join("")}</div></div>`;
+}
+
+/* ================= BILAN ================= */
 function showEnding(){
-let key=selectEnding();
-let e=ENDINGS[key];
-document.getElementById("app").innerHTML=`<div class="storyWrap"><div class="storycard">
-<span class="endBadge">${e.badge}</span>
-<div class="endTitle">${e.title}</div>
-<div class="storytext"><b>${esc(G.name)}</b><br><br>${e.text(G)}</div>
-<div class="choices"><button class="primary" onclick="resetGame()">Vivre une autre histoire</button></div>
-</div></div>`;
-localStorage.removeItem(KEY);
+ const t=G.traits;
+ const f=FAMILIES[G.flags.family];
+ const dominant=t.courage>=t.cunning&&t.courage>=t.loyalty&&t.courage>=t.compassion?"courage":
+   t.cunning>=t.loyalty&&t.cunning>=t.compassion?"instinct":
+   t.loyalty>=t.compassion?"loyauté":"compassion";
+ const titan=G.flags.titan?`<p>⚡ <b>Pouvoir de Titan :</b> ${esc(G.flags.titanType)}<br><span class="endBadge">${G.flags.titanSource==="start"?"présent dès le début":"éveillé pendant l'histoire"}</span></p>`:
+   `<p>⚔️ <b>Titan :</b> aucun pouvoir de Titan n'a été éveillé.</p>`;
+ document.getElementById("app").innerHTML=`<div class="storyWrap"><div class="storycard">
+ <span class="endBadge">Bilan de ton parcours</span>
+ <div class="endTitle">${esc(G.name)} — fin de parcours</div>
+ <div class="storytext">
+ <p>Famille : <b>${esc(f.name)}</b></p>
+ ${titan}
+ <p>Courage : ${t.courage} • Loyauté : ${t.loyalty} • Compassion : ${t.compassion} • Instinct : ${t.cunning}</p>
+ <p>Ta tendance dominante : <b>${dominant}</b>.</p>
+ <p>Tu as traversé une histoire parallèle aux événements de SNK sans remplacer les personnages principaux. Tes choix ont surtout déterminé ton rôle, tes relations, tes secrets et la manière dont tu as vécu les grands événements.</p>
+ </div>
+ <div class="choices"><button class="primary" onclick="resetGame()">Retourner au menu</button></div>
+ </div></div>`;
+ localStorage.removeItem(KEY);
 }
-function saveGame(){if(G.started&&G.currentScene)localStorage.setItem(KEY,JSON.stringify(G))}
-function loadGame(){let s=localStorage.getItem(KEY);if(!s)return;G=JSON.parse(s);render()}
-function resetGame(){localStorage.removeItem(KEY);location.reload()}
+
+function saveGame(){
+ if(G.started&&G.currentScene)localStorage.setItem(KEY,JSON.stringify(G));
+}
+function loadGame(){
+ let x=localStorage.getItem(KEY);
+ if(!x)return;
+ G=JSON.parse(x);
+ if(!G.flags)G.flags={};
+ if(!G.flags.family)G.flags.family=rollFamily();
+ render();
+}
+function resetGame(){
+ // No "new character" button inside an active story.
+ // Reset is only reachable from the title screen / after an ending.
+ if(!confirm("Recommencer effacera ta sauvegarde actuelle. Continuer ?"))return;
+ localStorage.removeItem(KEY);
+ location.reload();
+}
 render();
 </script>
 </body>
